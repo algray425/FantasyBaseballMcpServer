@@ -38,7 +38,7 @@ async def getHitterRankings(season: str, position: str = "", startDate: str = ""
 
     Args:
         season: The season to get rankings for (e.g. 2025, 2024)
-        position: The position to filter by valid positions are
+        position: The position to filter by (e.g. 1B, OF)
         startDate: The start date to filter hitter ranks by with format YYYY-MM-DD
         endDate: The end date to filter hitter ranks by with format YYYY-MM-DD
     """
