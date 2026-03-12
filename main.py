@@ -10,6 +10,8 @@ mcp = FastMCP("Fantasy Baseball")
 HITTER_PROJECTIONS_ENDPOINT             = "http://localhost:9292/api/v2/players/hitting/projections"
 STARTING_PITCHER_PROJECTIONS_ENDPOINT   = "http://localhost:9292/api/v2/players/startingPitchers/projections"
 HITTER_RANKING_ENDPOINT                 = "http://localhost:9292/api/v2/players/hitting/stats"
+STARTING_PITCHER_RANKING_ENDPOINT       = "http://localhost:9292/api/v2/players/startingPitching/stats"
+RELIEF_PITCHER_RANKING_ENDPOINT         = "http://localhost:9292/api/v2/players/reliefPitchers/stats"
 
 FANTASY_TEAM_SUMMARY_ENDPOINT = "http://localhost:9292/api/v2/users/fantasyTeamSummary"
 
@@ -28,6 +30,8 @@ class PitchingStat(Enum):
     ERA                 = 3
     WHIP                = 4
     KS_PER_NINE         = 5
+    SAVES               = 6
+    HOLDS               = 7
 
 async def makeFantasyBaseballRequest(url: str) -> dict[str, Any] | None:
     """ Make a request to the fantasy baseball API with proper error handling"""
@@ -79,16 +83,40 @@ def formatHitterProjections(hitterProjection: dict) -> str:
     Qualified Grade Percentile: {hitterProjection.get("qualifiedPercentileGrade", "Unknown")}
     """
 
-def formatHitterRanking(hitterProjection: dict) -> str:
+def formatHitterRanking(hitterRanking: dict) -> str:
     return f"""
-    Name: {hitterProjection.get("firstName", "Unknown")} {hitterProjection.get("lastName", "Unknown")}
-    Team: {hitterProjection.get("team", "Unknown")}
-    Position: {hitterProjection.get("position", "Unknown")}
-    Runs: {hitterProjection.get("runs", "Unknown")}
-    Home Runs: {hitterProjection.get("homeRuns", "Unknown")}
-    Rbis: {hitterProjection.get("rbis", "Unknown")}
-    Stolen Bases: {hitterProjection.get("stolenBases", "Unknown")}
-    OBP: {hitterProjection.get("onBasePercentage", "Unknown")}
+    Name: {hitterRanking.get("firstName", "Unknown")} {hitterRanking.get("lastName", "Unknown")}
+    Team: {hitterRanking.get("team", "Unknown")}
+    Position: {hitterRanking.get("position", "Unknown")}
+    Overall Percentile: {hitterRanking.get("grade", "Unknown")}
+    Runs: {hitterRanking.get("runs", "Unknown")}
+    Home Runs: {hitterRanking.get("homeRuns", "Unknown")}
+    Rbis: {hitterRanking.get("rbis", "Unknown")}
+    Stolen Bases: {hitterRanking.get("stolenBases", "Unknown")}
+    OBP: {hitterRanking.get("onBasePercentage", "Unknown")}
+    """
+
+def formatStartingPitcherRanking(pitcherRanking: dict) -> str:
+    return f"""
+    Name: {pitcherRanking.get("firstName", "Unknown")} {pitcherRanking.get("lastName", "Unknown")}
+    Team: {pitcherRanking.get("team", "Unknown")}
+    Overall Percentile: {pitcherRanking.get("grade", "Unknown")}
+    Quality Starts: {pitcherRanking.get("qualityStarts", "Unknown")}
+    ERA: {pitcherRanking.get("era", "Unknown")}
+    WHIP: {pitcherRanking.get("whip", "Unknown")}
+    Ks/9: {pitcherRanking.get("ksPerNine", "Unknown")}
+    """
+
+def formatReliefPitcherRanking(pitcherRanking: dict) -> str:
+    return f"""
+    Name: {pitcherRanking.get("firstName", "Unknown")} {pitcherRanking.get("lastName", "Unknown")}
+    Team: {pitcherRanking.get("team", "Unknown")}
+    Overall Percentile: {pitcherRanking.get("grade", "Unknown")}
+    Saves: {pitcherRanking.get("saves", "Unknown")}
+    Holds: {pitcherRanking.get("holds", "Unknown")}
+    ERA: {pitcherRanking.get("era", "Unknown")}
+    WHIP: {pitcherRanking.get("whip", "Unknown")}
+    Ks/9: {pitcherRanking.get("ksPerNine", "Unknown")}
     """
 
 def formatFantasyHitter(fantasyHitter: dict) -> str:
@@ -275,14 +303,82 @@ async def getHitterProjections(position: str = "", qualified: bool = False, sort
     return "\n---\n".join(projections)
 
 @mcp.tool()
+async def getStartingPitcherRankings(season: str, startDate: str = "", endDate: str = "",  leagueTypeFilter: str = "", leagueIdFilter: str = "") -> str:
+    """Get starting pitcher rankings for a season.
+
+Args:
+    season: The season to get rankings for (e.g. 2025, 2024)
+    startDate: The start date to filter starting pitcher rankings by with format YYYY-MM-DD
+    endDate: The end date to filter starting pitcher rankings by with format YYYY-MM-DD
+    leagueTypeFilter: The type of league to filter by (e.g. ESPN)
+    leagueIdFilter: The id of the league to filter by
+"""
+    url = f"{STARTING_PITCHER_RANKING_ENDPOINT}/{season}"
+
+    if len(startDate) != 0 or len(endDate) != 0 or len(leagueTypeFilter) != 0 or len(leagueIdFilter) != 0:
+        url = url + f"?"
+
+    if len(startDate) != 0:
+        url = url + f"startDate={startDate}&"
+
+    if len(endDate) != 0:
+        url = url + f"endDate={endDate}&"
+
+    if len(leagueTypeFilter) != 0:
+        url = url + f"leagueTypeFilter={leagueTypeFilter}&"
+
+    if len(leagueIdFilter) != 0:
+        url = url + f"leagueIdFilter={leagueIdFilter}&"
+
+    data = await makeFantasyBaseballRequest(url)
+
+    rankings = [formatStartingPitcherRanking(pitcher) for pitcher in data]
+
+    return "\n---\n".join(rankings)
+
+@mcp.tool()
+async def getReliefPitcherRankings(season: str, startDate: str = "", endDate: str = "",  leagueTypeFilter: str = "", leagueIdFilter: str = "") -> str:
+    """Get relief pitcher rankings for a season.
+
+Args:
+    season: The season to get rankings for (e.g. 2025, 2024)
+    startDate: The start date to filter relief pitcher rankings by with format YYYY-MM-DD
+    endDate: The end date to filter relief pitcher rankings by with format YYYY-MM-DD
+    leagueTypeFilter: The type of league to filter by (e.g. ESPN)
+    leagueIdFilter: The id of the league to filter by
+"""
+    url = f"{RELIEF_PITCHER_RANKING_ENDPOINT}/{season}"
+
+    if len(startDate) != 0 or len(endDate) != 0 or len(leagueTypeFilter) != 0 or len(leagueIdFilter) != 0:
+        url = url + f"?"
+
+    if len(startDate) != 0:
+        url = url + f"startDate={startDate}&"
+
+    if len(endDate) != 0:
+        url = url + f"endDate={endDate}&"
+
+    if len(leagueTypeFilter) != 0:
+        url = url + f"leagueTypeFilter={leagueTypeFilter}&"
+
+    if len(leagueIdFilter) != 0:
+        url = url + f"leagueIdFilter={leagueIdFilter}&"
+
+    data = await makeFantasyBaseballRequest(url)
+
+    rankings = [formatReliefPitcherRanking(pitcher) for pitcher in data]
+
+    return "\n---\n".join(rankings)
+
+@mcp.tool()
 async def getHitterRankings(season: str, position: str = "", startDate: str = "", endDate: str = "", leagueTypeFilter: str = "", leagueIdFilter: str = "") -> str:
     """Get hitter rankings for a season.
 
     Args:
         season: The season to get rankings for (e.g. 2025, 2024)
         position: The position to filter by (e.g. 1B, OF)
-        startDate: The start date to filter hitter ranks by with format YYYY-MM-DD
-        endDate: The end date to filter hitter ranks by with format YYYY-MM-DD
+        startDate: The start date to filter hitter rankings by with format YYYY-MM-DD
+        endDate: The end date to filter hitter rankings by with format YYYY-MM-DD
         leagueTypeFilter: The type of league to filter by (e.g. ESPN)
         leagueIdFilter: The id of the league to filter by
     """
