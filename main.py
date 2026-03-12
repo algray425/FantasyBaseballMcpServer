@@ -15,6 +15,8 @@ RELIEF_PITCHER_RANKING_ENDPOINT         = "http://localhost:9292/api/v2/players/
 
 FANTASY_TEAM_SUMMARY_ENDPOINT = "http://localhost:9292/api/v2/users/fantasyTeamSummary"
 
+ADD_FAVORITE_PLAYER_ENDPOINT = "http://localhost:9292/api/v2/users/addFavoritePlayer/"
+
 class HittingStat(Enum):
     PERCENTILE_OVERALL  = 1
     RUNS                = 2
@@ -33,7 +35,7 @@ class PitchingStat(Enum):
     SAVES               = 6
     HOLDS               = 7
 
-async def makeFantasyBaseballRequest(url: str) -> dict[str, Any] | None:
+async def makeFantasyBaseballGetRequest(url: str) -> dict[str, Any] | None:
     """ Make a request to the fantasy baseball API with proper error handling"""
     async with httpx.AsyncClient() as client:
         try:
@@ -45,8 +47,20 @@ async def makeFantasyBaseballRequest(url: str) -> dict[str, Any] | None:
         except Exception:
             return None
 
+async def makeFantasyBaseballPostRequest(url: str, data: dict) -> str | None:
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, json=data, timeout=30.0)
+            response.raise_for_status()
+            return "Added player successfully"
+        except httpx.HTTPStatusError as exception:
+            return exception.response.text
+        except Exception:
+            return None
+
 def formatStartingPitcherProjections(pitcherProjection: dict) -> str:
     return f"""
+    PlayerId {pitcherProjection.get("playerId", "Unknown")}
     Name: {pitcherProjection.get("firstName", "Unknown")} {pitcherProjection.get("lastName", "Unknown")}
     Team: {pitcherProjection.get("team", "Unknown")}
     Quality Starts: {pitcherProjection.get("qualityStarts", "Unknown")}
@@ -62,6 +76,7 @@ def formatStartingPitcherProjections(pitcherProjection: dict) -> str:
 
 def formatHitterProjections(hitterProjection: dict) -> str:
     return f"""
+    PlayerId: {hitterProjection.get("playerId", "Unknown")}
     Name: {hitterProjection.get("firstName", "Unknown")} {hitterProjection.get("lastName", "Unknown")}
     Team: {hitterProjection.get("team", "Unknown")}
     Position: {hitterProjection.get("position", "Unknown")}
@@ -85,6 +100,7 @@ def formatHitterProjections(hitterProjection: dict) -> str:
 
 def formatHitterRanking(hitterRanking: dict) -> str:
     return f"""
+    PlayerId: {hitterRanking.get("playerId", "Unknown")}
     Name: {hitterRanking.get("firstName", "Unknown")} {hitterRanking.get("lastName", "Unknown")}
     Team: {hitterRanking.get("team", "Unknown")}
     Position: {hitterRanking.get("position", "Unknown")}
@@ -98,6 +114,7 @@ def formatHitterRanking(hitterRanking: dict) -> str:
 
 def formatStartingPitcherRanking(pitcherRanking: dict) -> str:
     return f"""
+    PlayerId: {pitcherRanking.get("playerId", "Unknown")}
     Name: {pitcherRanking.get("firstName", "Unknown")} {pitcherRanking.get("lastName", "Unknown")}
     Team: {pitcherRanking.get("team", "Unknown")}
     Overall Percentile: {pitcherRanking.get("grade", "Unknown")}
@@ -109,6 +126,7 @@ def formatStartingPitcherRanking(pitcherRanking: dict) -> str:
 
 def formatReliefPitcherRanking(pitcherRanking: dict) -> str:
     return f"""
+    PlayerId: {pitcherRanking.get("playerId", "Unknown")}
     Name: {pitcherRanking.get("firstName", "Unknown")} {pitcherRanking.get("lastName", "Unknown")}
     Team: {pitcherRanking.get("team", "Unknown")}
     Overall Percentile: {pitcherRanking.get("grade", "Unknown")}
@@ -185,6 +203,29 @@ def formatCurrentMatchupStatus(teamSummary: dict) -> str:
     """
 
 @mcp.tool()
+async def addFavoritePlayer(userId: str, playerId: str) -> str:
+    """Add a player to the list of users favorite players
+
+    Args:
+        userId: The id of the user for the fantasy baseball app
+        playerId: The playerId of the player to add
+    """
+
+    url = f"{ADD_FAVORITE_PLAYER_ENDPOINT}"
+
+    data = {
+        'userId': userId,
+        'playerId': playerId
+    }
+
+    response = await makeFantasyBaseballPostRequest(url, data)
+
+    if response is None:
+        return "Could not add that player at this time"
+    else:
+        return response
+
+@mcp.tool()
 async def getFantasyTeamSummary(userId: str, leagueTypeFilter: str, leagueIdFilter: str, teamId: str) -> str:
     """Get the summary of the users fantasy team including
 
@@ -201,7 +242,7 @@ async def getFantasyTeamSummary(userId: str, leagueTypeFilter: str, leagueIdFilt
 
     url = f"{FANTASY_TEAM_SUMMARY_ENDPOINT}/{userId}/{leagueTypeFilter}/{leagueIdFilter}/{teamId}"
 
-    data = await makeFantasyBaseballRequest(url)
+    data = await makeFantasyBaseballGetRequest(url)
 
     rosterGradesJson = data.get("rosterGrades", [])
 
@@ -272,7 +313,7 @@ async def getStartingPitcherProjections(sortBy: PitchingStat = PitchingStat.PERC
     if sortBy != PitchingStat.PERCENTILE_OVERALL:
         url = url + f"?sortBy={sortBy.name}"
 
-    data = await makeFantasyBaseballRequest(url)
+    data = await makeFantasyBaseballGetRequest(url)
 
     projections = [formatStartingPitcherProjections(pitcher) for pitcher in data]
 
@@ -296,7 +337,7 @@ async def getHitterProjections(position: str = "", qualified: bool = False, sort
     if sortBy != HittingStat.NONE:
         url = url + f"&sortBy={sortBy.name}"
 
-    data = await makeFantasyBaseballRequest(url)
+    data = await makeFantasyBaseballGetRequest(url)
 
     projections = [formatHitterProjections(hitter) for hitter in data]
 
@@ -330,7 +371,7 @@ Args:
     if len(leagueIdFilter) != 0:
         url = url + f"leagueIdFilter={leagueIdFilter}&"
 
-    data = await makeFantasyBaseballRequest(url)
+    data = await makeFantasyBaseballGetRequest(url)
 
     rankings = [formatStartingPitcherRanking(pitcher) for pitcher in data]
 
@@ -364,7 +405,7 @@ Args:
     if len(leagueIdFilter) != 0:
         url = url + f"leagueIdFilter={leagueIdFilter}&"
 
-    data = await makeFantasyBaseballRequest(url)
+    data = await makeFantasyBaseballGetRequest(url)
 
     rankings = [formatReliefPitcherRanking(pitcher) for pitcher in data]
 
@@ -403,7 +444,7 @@ async def getHitterRankings(season: str, position: str = "", startDate: str = ""
     if len(leagueIdFilter) != 0:
         url = url + f"leagueIdFilter={leagueIdFilter}&"
 
-    data = await makeFantasyBaseballRequest(url)
+    data = await makeFantasyBaseballGetRequest(url)
 
     if not data or len(data) == 0:
         return "Unable to fetch hitter rankings for given season"
